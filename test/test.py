@@ -1,40 +1,33 @@
-# SPDX-FileCopyrightText: © 2024 Tiny Tapeout
-# SPDX-License-Identifier: Apache-2.0
-
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
-
+from cocotb.triggers import RisingEdge, Timer
 
 @cocotb.test()
-async def test_project(dut):
-    dut._log.info("Start")
+async def bcd_counter_test(dut):
+    """Test del contador BCD de 0 a 9"""
 
-    # Set the clock period to 10 us (100 KHz)
-    clock = Clock(dut.clk, 10, unit="us")
-    cocotb.start_soon(clock.start())
+    # Crear reloj de 100 MHz (10 ns)
+    cocotb.fork(Clock(dut.clk, 10, units="ns").start())
 
-    # Reset
-    dut._log.info("Reset")
-    dut.ena.value = 1
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
+    # Reset inicial
+    dut.rst_n <= 0
+    dut.ena <= 0
+    await Timer(20, units="ns")
 
-    dut._log.info("Test project behavior")
+    dut.rst_n <= 1
+    dut.ena <= 1
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
+    # Comprobamos 20 ciclos de reloj
+    for i in range(20):
+        await RisingEdge(dut.clk)
+        # Verificamos que el BCD se mantenga entre 0 y 9
+        if int(dut.bcd_units.value) > 9:
+            raise cocotb.result.TestFailure(
+                f"BCD fuera de rango: {int(dut.bcd_units.value)} en ciclo {i}"
+            )
+        dut._log.info(f"Tiempo: {i*10} ns, BCD = {int(dut.bcd_units.value)}")
+    
+    # Fin del test
+    dut.ena <= 0
+    await Timer(10, units="ns")
 
-    # Wait for one clock cycle to see the output values
-    await ClockCycles(dut.clk, 1)
-
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
-
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
